@@ -52,6 +52,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *args):  # keep the console quiet
         pass
 
+    def handle_one_request(self):
+        # Browsers routinely close connections early (e.g. on navigation or
+        # reload). Swallow the resulting broken-pipe/reset errors so the
+        # launcher window stays clean instead of printing a scary traceback.
+        try:
+            super().handle_one_request()
+        except (ConnectionResetError, BrokenPipeError):
+            self.close_connection = True
+
 
 def find_free_port(preferred=8753):
     for port in [preferred] + list(range(8754, 8800)):
