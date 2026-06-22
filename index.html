@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Job Tracker</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1>Job Tracker</h1>
+      <span id="count" class="count"></span>
+    </div>
+    <div class="topbar-right">
+      <span id="status-msg" class="status-msg"></span>
+      <button id="columns-btn" class="btn" type="button">Columns</button>
+      <button id="export-btn" class="btn" type="button">Export CSV</button>
+      <button id="save-btn" class="btn btn-primary" type="button" disabled>Saved</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input id="search" class="search" type="search" placeholder="Search companies, notes, contacts…" autocomplete="off" />
+    <div id="filters" class="filters"></div>
+    <button id="clear-filters" class="btn btn-ghost" type="button">Clear filters</button>
+  </div>
+
+  <!-- Columns picker (hidden by default) -->
+  <div id="columns-panel" class="columns-panel" hidden></div>
+
+  <main class="table-wrap">
+    <table id="table">
+      <thead><tr id="head-row"></tr></thead>
+      <tbody id="body"></tbody>
+    </table>
+    <p id="empty" class="empty" hidden>No companies match your filters.</p>
+  </main>
+
+  <div id="load-error" class="load-error" hidden>
+    <h2>Couldn't load tracker.csv</h2>
+    <p>This app needs to be started with its launcher so it can read and save your data.</p>
+    <p>Double-click <strong>start.command</strong> in this folder, and the app will open
+       at <code>http://127.0.0.1</code>. Opening <code>index.html</code> directly
+       (a <code>file://</code> address) won't work.</p>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
