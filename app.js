@@ -317,6 +317,17 @@ function detailRow(row, span) {
     wrap.appendChild(field);
   }
   td.appendChild(wrap);
+
+  const footer = document.createElement("div");
+  footer.className = "detail-footer";
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "btn btn-danger";
+  del.textContent = "Delete company";
+  del.addEventListener("click", () => deleteCompany(row));
+  footer.appendChild(del);
+  td.appendChild(footer);
+
   tr.appendChild(td);
   return tr;
 }
@@ -493,6 +504,50 @@ async function save() {
   }
 }
 
+// ---------------- Add / delete companies ----------------
+function nextId() {
+  let max = 0;
+  for (const r of state.rows) {
+    const n = parseInt(r.id, 10);
+    if (Number.isFinite(n) && n > max) max = n;
+  }
+  return String(max + 1);
+}
+
+function addCompany() {
+  const row = {};
+  for (const h of state.headers) row[h] = "";
+  row.id = nextId();
+  if ("Status" in row) row.Status = "Not started";
+  stamp(row);
+
+  // Clear anything that could hide the new row, and drop sorting so it lands
+  // at the top, then open it for editing.
+  for (const k of Object.keys(state.filters)) state.filters[k].clear();
+  state.search = "";
+  document.getElementById("search").value = "";
+  state.sortKey = null;
+  state.rows.unshift(row);
+  state.expanded.add(row.id);
+  setDirty(true);
+  buildFilters();
+  render();
+
+  document.querySelector(".table-wrap").scrollTop = 0;
+  const td = document.querySelector(`tr.row[data-id="${row.id}"] td[data-key="Company"]`);
+  if (td) startEdit(td, row, COL_BY_KEY["Company"]);
+}
+
+function deleteCompany(row) {
+  const name = (row.Company || "").trim() || "this company";
+  if (!confirm(`Delete ${name}? This is removed when you next save.`)) return;
+  const i = state.rows.indexOf(row);
+  if (i !== -1) state.rows.splice(i, 1);
+  state.expanded.delete(row.id);
+  setDirty(true);
+  render();
+}
+
 function exportCSV() {
   const csv = serializeCSV(state.headers, state.rows);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -525,6 +580,7 @@ document.getElementById("columns-btn").addEventListener("click", () => {
   p.hidden = !p.hidden;
 });
 
+document.getElementById("add-btn").addEventListener("click", addCompany);
 document.getElementById("save-btn").addEventListener("click", save);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
 

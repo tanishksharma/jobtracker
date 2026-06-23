@@ -8,13 +8,41 @@ library only -- no installs needed.
 
 import http.server
 import os
+import shutil
 import socket
 import socketserver
 import tempfile
+import time
 import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(HERE, "tracker.csv")
+BACKUP_DIR = os.path.join(HERE, "backups")
+KEEP_BACKUPS = 10
+
+
+def backup_existing_csv():
+    """Copy the current tracker.csv into backups/ before it's overwritten,
+    then prune to the most recent KEEP_BACKUPS files. Best-effort: a backup
+    failure must never block a save."""
+    if not os.path.exists(CSV_PATH):
+        return
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        # Millisecond resolution so rapid successive saves don't overwrite
+        # each other's backups.
+        now = time.time()
+        stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now))
+        stamp += f"-{int((now % 1) * 1000):03d}"
+        shutil.copy2(CSV_PATH, os.path.join(BACKUP_DIR, f"tracker-{stamp}.csv"))
+        backups = sorted(
+            f for f in os.listdir(BACKUP_DIR)
+            if f.startswith("tracker-") and f.endswith(".csv")
+        )
+        for old in backups[:-KEEP_BACKUPS]:
+            os.remove(os.path.join(BACKUP_DIR, old))
+    except Exception:  # noqa: BLE001 -- never let backup issues block a save
+        pass
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):
@@ -29,8 +57,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8")
 
-        # Write atomically: temp file in the same dir, then os.replace.
+        # Snapshot the current file before overwriting, then write atomically:
+        # temp file in the same dir, then os.replace.
         try:
+            backup_existing_csv()
             fd, tmp = tempfile.mkstemp(dir=HERE, prefix=".tracker-", suffix=".tmp")
             with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
                 f.write(body)

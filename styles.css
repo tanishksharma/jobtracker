@@ -78,6 +78,13 @@ h1 { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
   cursor: default;
 }
 
+.btn-danger {
+  border-color: transparent;
+  color: #b42318;
+  background: transparent;
+}
+.btn-danger:hover { background: #fdecec; border-color: #f4c9c5; }
+
 /* ---------- Toolbar ---------- */
 .toolbar {
   display: flex;
@@ -306,6 +313,12 @@ tr.detail td {
   background: #fff;
 }
 .detail-field textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+.detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px 16px;
+  border-bottom: 1px solid var(--border);
+}
 
 .empty, .load-error {
   text-align: center;
