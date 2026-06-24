@@ -130,8 +130,8 @@ function applyReadOnly() {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   }
-  const msg = document.getElementById("status-msg");
-  if (msg) msg.textContent = "View-only — editing needs the local app";
+  const banner = document.getElementById("readonly-banner");
+  if (banner) banner.hidden = false;
 }
 
 // ---------------- Derived data ----------------

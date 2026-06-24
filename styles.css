@@ -85,6 +85,21 @@ h1 { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
 }
 .btn-danger:hover { background: #fdecec; border-color: #f4c9c5; }
 
+/* ---------- Read-only banner (hosted/static deploy) ---------- */
+.readonly-banner {
+  padding: 10px 20px;
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+}
+.readonly-banner code {
+  background: #fff;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+
 /* ---------- Toolbar ---------- */
 .toolbar {
   display: flex;
