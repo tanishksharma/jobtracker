@@ -320,12 +320,20 @@ function detailRow(row, span) {
 
   const footer = document.createElement("div");
   footer.className = "detail-footer";
+
+  const dup = document.createElement("button");
+  dup.type = "button";
+  dup.className = "btn btn-ghost";
+  dup.textContent = "Duplicate";
+  dup.addEventListener("click", () => duplicateCompany(row));
+
   const del = document.createElement("button");
   del.type = "button";
   del.className = "btn btn-danger";
   del.textContent = "Delete company";
   del.addEventListener("click", () => deleteCompany(row));
-  footer.appendChild(del);
+
+  footer.append(dup, del);
   td.appendChild(footer);
 
   tr.appendChild(td);
@@ -538,6 +546,19 @@ function addCompany() {
   if (td) startEdit(td, row, COL_BY_KEY["Company"]);
 }
 
+function duplicateCompany(row) {
+  const copy = { ...row, id: nextId() };
+  if ("Company" in copy) copy.Company = (copy.Company || "").trim() + " (copy)";
+  stamp(copy);
+  const i = state.rows.indexOf(row);
+  state.rows.splice(i === -1 ? state.rows.length : i + 1, 0, copy);
+  state.expanded.add(copy.id);
+  setDirty(true);
+  render();
+  const tr = document.querySelector(`tr.row[data-id="${copy.id}"]`);
+  if (tr) tr.scrollIntoView({ block: "center" });
+}
+
 function deleteCompany(row) {
   const name = (row.Company || "").trim() || "this company";
   if (!confirm(`Delete ${name}? This is removed when you next save.`)) return;
@@ -546,6 +567,75 @@ function deleteCompany(row) {
   state.expanded.delete(row.id);
   setDirty(true);
   render();
+}
+
+// ---------------- Backups ----------------
+function fmtSize(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+  return (n / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+async function toggleBackups() {
+  const panel = document.getElementById("backups-panel");
+  if (!panel.hidden) { panel.hidden = true; return; }
+  panel.hidden = false;
+  panel.textContent = "Loading backups…";
+  let items;
+  try {
+    const res = await fetch("backups", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    items = await res.json();
+  } catch (e) {
+    panel.textContent = "Couldn't load backups — is the launcher still running?";
+    return;
+  }
+  panel.textContent = "";
+
+  const head = document.createElement("div");
+  head.className = "backups-head";
+  head.textContent = items.length
+    ? "Restore replaces tracker.csv with a saved snapshot. Your current file is backed up first."
+    : "No backups yet — they're created automatically each time you save.";
+  panel.appendChild(head);
+
+  for (const it of items) {
+    const rowEl = document.createElement("div");
+    rowEl.className = "backup-row";
+    const info = document.createElement("span");
+    info.className = "backup-info";
+    info.textContent = `${it.when}  ·  ${fmtSize(it.size)}`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn";
+    btn.textContent = "Restore";
+    btn.addEventListener("click", () => restoreBackup(it));
+    rowEl.append(info, btn);
+    panel.appendChild(rowEl);
+  }
+}
+
+async function restoreBackup(it) {
+  const warn = state.dirty
+    ? "You have unsaved changes that will be lost. "
+    : "";
+  if (!confirm(`${warn}Restore the snapshot from ${it.when}? Your current tracker.csv is backed up first.`))
+    return;
+  const msg = document.getElementById("status-msg");
+  try {
+    const res = await fetch("restore", { method: "POST", body: it.name });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById("backups-panel").hidden = true;
+    state.expanded.clear();
+    setDirty(false);
+    await load();
+    msg.className = "status-msg";
+    msg.textContent = `Restored snapshot from ${it.when}`;
+    setTimeout(() => { if (msg.textContent.startsWith("Restored")) msg.textContent = ""; }, 3000);
+  } catch (e) {
+    msg.className = "status-msg error";
+    msg.textContent = "Restore failed — is the launcher still running?";
+  }
 }
 
 function exportCSV() {
@@ -581,6 +671,7 @@ document.getElementById("columns-btn").addEventListener("click", () => {
 });
 
 document.getElementById("add-btn").addEventListener("click", addCompany);
+document.getElementById("backups-btn").addEventListener("click", toggleBackups);
 document.getElementById("save-btn").addEventListener("click", save);
 document.getElementById("export-btn").addEventListener("click", exportCSV);
 

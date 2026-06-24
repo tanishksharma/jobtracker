@@ -19,13 +19,15 @@ CSV file. No accounts, no hosting, no internet required — it all runs on your 
      apply, Tips, Contact details, Content, Scope of AI, Website).
    - **Edit** — click any cell to edit. Status/Priority/etc. are dropdowns.
    - **Add** — click **+ Add company** to create a new blank row at the top, ready to fill in.
-   - **Delete** — expand a row (▸) and click **Delete company** at the bottom of its
-     details. The row is removed when you next save.
+   - **Duplicate / Delete** — expand a row (▸); at the bottom of its details, **Duplicate**
+     clones it just below, and **Delete company** removes it. Both take effect when you save.
    - **Columns** — show/hide table columns with the *Columns* button.
 3. Click **Save changes** to write your edits back into `tracker.csv`.
    (**Export CSV** downloads a separate backup copy.)
    - Every save first snapshots the previous `tracker.csv` into a `backups/` folder
      (the last 10 are kept), so a bad edit is always recoverable.
+   - Click **Backups** to see those snapshots and **Restore** any of them. Restoring backs up
+     your current file first, so you can always undo a restore too.
 4. When you're done, close the browser tab and the Terminal window (or press
    Ctrl+C in it).
 

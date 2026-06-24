@@ -181,6 +181,25 @@ h1 { font-size: 18px; font-weight: 650; margin: 0; letter-spacing: -.01em; }
 }
 .columns-panel input { accent-color: var(--accent); }
 
+/* ---------- Backups panel ---------- */
+.backups-panel {
+  padding: 12px 20px;
+  background: #fbfcfd;
+  border-bottom: 1px solid var(--border);
+  max-height: 320px;
+  overflow: auto;
+}
+.backups-head { font-size: 13px; color: var(--text-soft); margin-bottom: 10px; }
+.backup-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+.backup-info { font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums; }
+
 /* ---------- Table ---------- */
 .table-wrap {
   flex: 1;

@@ -7,7 +7,9 @@ library only -- no installs needed.
 """
 
 import http.server
+import json
 import os
+import re
 import shutil
 import socket
 import socketserver
@@ -19,6 +21,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CSV_PATH = os.path.join(HERE, "tracker.csv")
 BACKUP_DIR = os.path.join(HERE, "backups")
 KEEP_BACKUPS = 10
+BACKUP_NAME_RE = re.compile(r"^tracker-\d{8}-\d{6}-\d{3}\.csv$")
 
 
 def backup_existing_csv():
@@ -45,34 +48,98 @@ def backup_existing_csv():
         pass
 
 
+def list_backups():
+    """Return backups newest-first as [{name, when, size}, ...]."""
+    if not os.path.isdir(BACKUP_DIR):
+        return []
+    items = []
+    for name in os.listdir(BACKUP_DIR):
+        if not BACKUP_NAME_RE.match(name):
+            continue
+        path = os.path.join(BACKUP_DIR, name)
+        # name is tracker-YYYYMMDD-HHMMSS-mmm.csv
+        d, t = name[len("tracker-"):-len(".csv")].split("-")[:2]
+        when = (f"{d[0:4]}-{d[4:6]}-{d[6:8]} "
+                f"{t[0:2]}:{t[2:4]}:{t[4:6]}")
+        items.append({"name": name, "when": when, "size": os.path.getsize(path)})
+    items.sort(key=lambda it: it["name"], reverse=True)
+    return items
+
+
+def restore_backup(name):
+    """Replace tracker.csv with the named backup, after snapshotting the
+    current file first. Returns (ok, message)."""
+    if not BACKUP_NAME_RE.match(name):
+        return False, "Invalid backup name."
+    src = os.path.join(BACKUP_DIR, name)
+    # Guard against any path trickery: resolved path must live in BACKUP_DIR.
+    if os.path.dirname(os.path.abspath(src)) != os.path.abspath(BACKUP_DIR):
+        return False, "Invalid backup path."
+    if not os.path.isfile(src):
+        return False, "Backup not found."
+    try:
+        backup_existing_csv()  # so a restore is itself undoable
+        fd, tmp = tempfile.mkstemp(dir=HERE, prefix=".tracker-", suffix=".tmp")
+        with os.fdopen(fd, "wb") as out, open(src, "rb") as inp:
+            shutil.copyfileobj(inp, out)
+        os.replace(tmp, CSV_PATH)
+        return True, "restored"
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Restore failed: {exc}"
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=HERE, **kwargs)
 
-    def do_POST(self):
-        if self.path.rstrip("/") != "/save":
-            self.send_error(404, "Not found")
-            return
+    def _send_text(self, code, text):
+        body = text.encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
+    def _send_json(self, obj):
+        body = json.dumps(obj).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if self.path.rstrip("/") == "/backups":
+            self._send_json(list_backups())
+            return
+        super().do_GET()
+
+    def do_POST(self):
+        path = self.path.rstrip("/")
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length).decode("utf-8")
 
-        # Snapshot the current file before overwriting, then write atomically:
-        # temp file in the same dir, then os.replace.
-        try:
-            backup_existing_csv()
-            fd, tmp = tempfile.mkstemp(dir=HERE, prefix=".tracker-", suffix=".tmp")
-            with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-                f.write(body)
-            os.replace(tmp, CSV_PATH)
-        except Exception as exc:  # noqa: BLE001
-            self.send_error(500, f"Save failed: {exc}")
-            return
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(b"saved")
+        if path == "/save":
+            # Snapshot the current file before overwriting, then write
+            # atomically: temp file in the same dir, then os.replace.
+            try:
+                backup_existing_csv()
+                fd, tmp = tempfile.mkstemp(dir=HERE, prefix=".tracker-", suffix=".tmp")
+                with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
+                    f.write(body)
+                os.replace(tmp, CSV_PATH)
+            except Exception as exc:  # noqa: BLE001
+                self.send_error(500, f"Save failed: {exc}")
+                return
+            self._send_text(200, "saved")
+        elif path == "/restore":
+            ok, msg = restore_backup(body.strip())
+            if ok:
+                self._send_text(200, "restored")
+            else:
+                self._send_text(400, msg)
+        else:
+            self.send_error(404, "Not found")
 
     def end_headers(self):
         # Never cache app files, so edits to the source are always picked up.
