@@ -247,6 +247,7 @@ tbody tr.row:hover td { background: #fafbfc; }
 tbody td.col-company { font-weight: 600; }
 tbody td.editable { cursor: text; }
 tbody td.editable.categorical { cursor: pointer; }
+body.read-only tbody td.editable { cursor: default; }
 
 .expander {
   width: 26px;

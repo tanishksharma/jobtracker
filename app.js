@@ -31,6 +31,11 @@ const CAT_COLS = COLUMNS.filter((c) => c.type === "cat");
 const TABLE_COLS = COLUMNS.filter((c) => c.type !== "long"); // selectable as columns
 const DETAIL_COLS = COLUMNS.filter((c) => c.type === "long" || c.type === "url");
 
+// Read-only mode: the editing/save/backup features need the local Python
+// server. When the app is served from anywhere else (e.g. a static host like
+// Vercel), there's no backend to write to, so we present a view-only version.
+const READ_ONLY = !["127.0.0.1", "localhost", ""].includes(location.hostname);
+
 // Custom orderings (for sorting + dropdown order). Anything not listed -> alpha.
 const ORDER = {
   "Priority": ["High", "Medium", "Low"],
@@ -114,7 +119,19 @@ async function load() {
   });
   buildColumnsPanel();
   buildFilters();
+  if (READ_ONLY) applyReadOnly();
   render();
+}
+
+// Hide write controls and show a notice when there's no local backend.
+function applyReadOnly() {
+  document.body.classList.add("read-only");
+  for (const id of ["add-btn", "save-btn", "backups-btn"]) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  }
+  const msg = document.getElementById("status-msg");
+  if (msg) msg.textContent = "View-only — editing needs the local app";
 }
 
 // ---------------- Derived data ----------------
@@ -266,7 +283,7 @@ function render() {
       const td = document.createElement("td");
       td.dataset.key = col.key;
       fillCell(td, row, col);
-      if (td.classList.contains("editable")) {
+      if (!READ_ONLY && td.classList.contains("editable")) {
         td.addEventListener("click", () => startEdit(td, row, col));
       }
       tr.appendChild(td);
@@ -305,6 +322,7 @@ function detailRow(row, span) {
       : document.createElement("textarea");
     editor.value = row[col.key] || "";
     if (col.type === "url") editor.type = "url";
+    if (READ_ONLY) editor.readOnly = true;
     editor.addEventListener("change", () => {
       if ((row[col.key] || "") !== editor.value) {
         row[col.key] = editor.value;
@@ -317,6 +335,8 @@ function detailRow(row, span) {
     wrap.appendChild(field);
   }
   td.appendChild(wrap);
+
+  if (READ_ONLY) { tr.appendChild(td); return tr; }
 
   const footer = document.createElement("div");
   footer.className = "detail-footer";
