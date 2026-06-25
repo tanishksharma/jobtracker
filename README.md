@@ -1,5 +1,17 @@
 # Job Tracker
 
+This repo now has **two ways to run**:
+
+- **V1 — local desktop tool** (this file, below): a single-folder app backed by `tracker.csv`,
+  served by a tiny Python server. No accounts, no internet. Great for personal use on your Mac.
+- **V2 — hosted web app** (Next.js + Supabase): Google sign-in and your data in the cloud,
+  per-user. See **[`docs/V2-SETUP.md`](docs/V2-SETUP.md)** for account setup, and the
+  **V2 section at the bottom** of this file for how it runs and deploys.
+
+---
+
+## V1 — local desktop tool
+
 A small, local web app for working with your company-research tracker. It's a
 clickable, sortable, filterable, searchable, editable table backed by a single
 CSV file. No accounts, no hosting, no internet required — it all runs on your Mac.
@@ -50,12 +62,45 @@ switching machines, so you don't create a "conflicted copy".
 | `tracker.csv` | Your data — the single source of truth. |
 | `backups/` | Automatic timestamped snapshots taken before each save (last 10 kept). |
 
-## Down the road
+---
 
-Because it's plain HTML/CSS/JS plus a CSV, the upgrade paths are open:
+## V2 — hosted web app (Next.js + Supabase)
 
-- **Host it live** — the front end can be deployed to a static host; the local save
-  step would be swapped for a hosted backend or database.
-- **Make it a real app icon** — wrap `start.command` as a macOS `.app` (e.g. with
-  Platypus), or repackage the web UI with Electron/Tauri for a native window.
-- **Bigger data** — the CSV can move to SQLite (also just a file) if it ever grows.
+A multi-user version of the tracker: sign in with Google, and your companies live in a
+Supabase database (isolated per user via Row Level Security). The table behaves like V1
+(sort / filter / search / inline edit / add / delete / duplicate), but edits save straight
+to the database instead of a CSV.
+
+### One-time setup
+Follow **[`docs/V2-SETUP.md`](docs/V2-SETUP.md)** to create the Supabase, Google Cloud, and
+Vercel accounts and run the database schema in `supabase/0001_v2_foundation.sql`.
+
+### Environment variables
+Set these in Vercel (and in `.env.local` for local dev — see `.env.example`):
+
+| Variable | From |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Project Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API (secret; reserved for later) |
+
+> `NEXT_PUBLIC_*` vars are read at **build time**, so set them in Vercel *before* deploying
+> (or redeploy after adding them).
+
+### Run / deploy
+- **Local dev:** `npm install` then `npm run dev` → http://localhost:3000
+- **Deploy:** push to `main`; Vercel builds the Next.js app automatically.
+
+### Importing your data
+On first sign-in your tracker is empty. Click **Import starter list** to load the companies
+from `public/tracker.csv` (a snapshot of the V1 `tracker.csv`) into your account.
+
+### Project layout (V2)
+| Path | What it does |
+|------|--------------|
+| `app/` | Next.js App Router pages: `login/`, `tracker/`, `auth/` routes |
+| `lib/supabase/` | Browser + server Supabase clients |
+| `lib/columns.ts` / `lib/csv.ts` | Shared column config + CSV parsing |
+| `middleware.ts` | Refreshes the auth session on each request |
+| `supabase/0001_v2_foundation.sql` | Database schema + Row Level Security |
+| `public/tracker.csv` | Seed data for the in-app import |
