@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useDeferredValue } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { parseCSV } from "@/lib/csv";
 import {
@@ -78,6 +78,11 @@ export default function TrackerClient({
   const [msg, setMsg] = useState("");
   const [importing, setImporting] = useState(false);
 
+  // Defer search so filtering 2,000+ rows doesn't block each keystroke.
+  const deferredSearch = useDeferredValue(search);
+  // Guards against onBlur firing a second commit right after Enter/Escape.
+  const justCommitted = useRef(false);
+
   // Close filter dropdowns on outside click.
   useEffect(() => {
     const close = () => setOpenFilter(null);
@@ -109,7 +114,7 @@ export default function TrackerClient({
   }
 
   const shownRows = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    const term = deferredSearch.trim().toLowerCase();
     let out = rows.filter((r) => {
       for (const [key, set] of Object.entries(filters)) {
         if (set.size && !set.has(val(r, key))) return false;
@@ -140,7 +145,7 @@ export default function TrackerClient({
       });
     }
     return out;
-  }, [rows, filters, search, sortKey, sortDir]);
+  }, [rows, filters, deferredSearch, sortKey, sortDir]);
 
   const shownColumns = TABLE_COLS.filter(
     (c) => c.company || visible.has(c.key),
@@ -152,7 +157,11 @@ export default function TrackerClient({
       .from("companies")
       .update(patch)
       .eq("id", id);
-    if (error) flash("Save failed — " + error.message, true);
+    if (error) {
+      flash("Save failed — " + error.message, true);
+      return false;
+    }
+    return true;
   }
 
   function setCell(id: string, key: string, value: string) {
@@ -164,13 +173,23 @@ export default function TrackerClient({
   async function commitEdit(row: Company, key: string, value: string) {
     setEditing(null);
     if (val(row, key) === value.trim()) return;
+    const prev = (row[key] ?? "").toString();
+    const prevUpdated = row.updated_at;
     const now = new Date().toISOString();
     setRows((rs) =>
       rs.map((r) =>
         r.id === row.id ? { ...r, [key]: value, updated_at: now } : r,
       ),
     );
-    await persist(row.id, { [key]: value });
+    const ok = await persist(row.id, { [key]: value });
+    if (!ok) {
+      // Roll back so the table never shows an edit the database didn't store.
+      setRows((rs) =>
+        rs.map((r) =>
+          r.id === row.id ? { ...r, [key]: prev, updated_at: prevUpdated } : r,
+        ),
+      );
+    }
   }
 
   async function addCompany() {
@@ -221,9 +240,18 @@ export default function TrackerClient({
   async function deleteCompany(row: Company) {
     const name = val(row, "company") || "this company";
     if (!confirm(`Delete ${name}? This can't be undone.`)) return;
+    const index = rows.findIndex((r) => r.id === row.id);
     setRows((rs) => rs.filter((r) => r.id !== row.id));
     const { error } = await supabase.from("companies").delete().eq("id", row.id);
-    if (error) flash("Delete failed — " + error.message, true);
+    if (error) {
+      flash("Delete failed — " + error.message, true);
+      // Restore the row in its original position.
+      setRows((rs) => {
+        const next = [...rs];
+        next.splice(index < 0 ? next.length : index, 0, row);
+        return next;
+      });
+    }
   }
 
   async function importStarter() {
@@ -241,7 +269,7 @@ export default function TrackerClient({
         });
         return o;
       });
-      const inserted: Company[] = [];
+      let count = 0;
       for (let i = 0; i < records.length; i += 500) {
         const batch = records.slice(i, i + 500);
         const { data, error } = await supabase
@@ -249,16 +277,26 @@ export default function TrackerClient({
           .insert(batch)
           .select();
         if (error) throw error;
-        if (data) inserted.push(...(data as Company[]));
+        count += data?.length ?? 0;
         setMsg(`Importing… ${Math.min(i + 500, records.length)}/${records.length}`);
       }
-      setRows((rs) => [...rs, ...inserted]);
-      flash(`Imported ${inserted.length} companies`);
+      await refreshFromDb();
+      flash(`Imported ${count} companies`);
     } catch (e) {
       flash("Import failed — " + (e as Error).message, true);
+      // Re-sync so local state matches whatever actually landed in the DB.
+      await refreshFromDb();
     } finally {
       setImporting(false);
     }
+  }
+
+  async function refreshFromDb() {
+    const { data } = await supabase
+      .from("companies")
+      .select("*")
+      .order("created_at", { ascending: true });
+    if (data) setRows(data as Company[]);
   }
 
   function toggleFilterValue(key: string, opt: string, on: boolean) {
@@ -341,10 +379,23 @@ export default function TrackerClient({
             autoFocus
             defaultValue={val(row, col.key)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") commitEdit(row, col.key, e.currentTarget.value);
-              else if (e.key === "Escape") setEditing(null);
+              if (e.key === "Enter") {
+                justCommitted.current = true;
+                commitEdit(row, col.key, e.currentTarget.value);
+              } else if (e.key === "Escape") {
+                justCommitted.current = true;
+                setEditing(null);
+              }
             }}
-            onBlur={(e) => commitEdit(row, col.key, e.currentTarget.value)}
+            onBlur={(e) => {
+              // Enter/Escape already handled this; don't double-commit on the
+              // blur that follows when the input unmounts.
+              if (justCommitted.current) {
+                justCommitted.current = false;
+                return;
+              }
+              commitEdit(row, col.key, e.currentTarget.value);
+            }}
           />
         </td>
       );
